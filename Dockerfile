@@ -6,6 +6,7 @@
 #                         cloudprober/cloudprober
 FROM busybox
 ADD cloudprober /cloudprober
+ADD docker /docker_check
 COPY ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 ENTRYPOINT ["/cloudprober", "--logtostderr"]
