@@ -12,6 +12,7 @@ test:
 
 $(BINARY): $(SOURCES)
 	CGO_ENABLED=0 go build -o cloudprober -ldflags "-X main.version=$(VERSION) -extldflags -static" ./cmd/cloudprober.go
+	CGO_ENABLED=0 go build -o docker_check -ldflags "-X main.version=$(VERSION) -extldflags -static" ./examples/external/docker_check.go
 
 ca-certificates.crt: $(CACERTS)
 	cp $(CACERTS) ca-certificates.crt

@@ -187,9 +187,28 @@ func isClientTimeout(err error) bool {
 // httpRequest executes an HTTP request and updates the provided result struct.
 func (p *Probe) httpRequest(req *http.Request, result *probeRunResult) {
 	start := time.Now()
+	var dnsLatency, connLatency, reqLatancy, tlsHandshakeLatency, latency time.Duration
 	result.total.Inc()
-	resp, err := p.client.Do(req)
-	latency := time.Since(start)
+	trace := &httptrace.ClientTrace{
+
+		DNSDone: func(_ httptrace.DNSDoneInfo) {
+			dnsLatency = time.Since(start)
+		},
+		ConnectDone: func(_, _ string, _ error) {
+			connLatency = time.Since(start)
+		},
+		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
+			tlsHandshakeLatency = time.Since(start)
+		},
+		WroteRequest: func(_ httptrace.WroteRequestInfo) {
+			reqLatancy = time.Since(start)
+		},
+		GotFirstResponseByte: func() {
+			latency = time.Since(start)
+		},
+	}
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	resp, err := p.client.Transport.RoundTrip(req)
 
 	if err != nil {
 		if isClientTimeout(err) {
@@ -220,6 +239,10 @@ func (p *Probe) httpRequest(req *http.Request, result *probeRunResult) {
 	}
 
 	result.success.Inc()
+	result.dnsLatency.AddFloat64(dnsLatency.Seconds() / p.opts.LatencyUnit.Seconds())
+	result.connLatency.AddFloat64(connLatency.Seconds() / p.opts.LatencyUnit.Seconds())
+	result.tlsHandshakeLatency.AddFloat64(tlsHandshakeLatency.Seconds() / p.opts.LatencyUnit.Seconds())
+	result.reqLatancy.AddFloat64(reqLatancy.Seconds() / p.opts.LatencyUnit.Seconds())
 	result.latency.AddFloat64(latency.Seconds() / p.opts.LatencyUnit.Seconds())
 	if p.c.GetExportResponseAsMetrics() {
 		if len(respBody) <= maxResponseSizeForMetrics {
@@ -267,58 +290,6 @@ func (p *Probe) runProbe(resultsChan chan<- probeutils.ProbeResult) {
 
 			for i := 0; i < int(p.c.GetRequestsPerProbe()); i++ {
 				p.httpRequest(req, &result)
-				start := time.Now()
-				var dnsLatency, connLatency, reqLatancy, tlsHandshakeLatency, latency time.Duration
-				result.total.Inc()
-				trace := &httptrace.ClientTrace{
-
-					DNSDone: func(_ httptrace.DNSDoneInfo) {
-						dnsLatency = time.Since(start)
-					},
-					ConnectDone: func(_, _ string, _ error) {
-						connLatency = time.Since(start)
-					},
-					TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
-						tlsHandshakeLatency = time.Since(start)
-					},
-					WroteRequest: func(_ httptrace.WroteRequestInfo) {
-						reqLatancy = time.Since(start)
-					},
-					GotFirstResponseByte: func() {
-						latency = time.Since(start)
-					},
-				}
-				req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-				resp, err := p.client.Transport.RoundTrip(req)
-
-				if err != nil {
-					if isClientTimeout(err) {
-						p.l.Warningf("Target:%s, Url:%s, http.runProbe: timeout error: %v", target, req.URL.String(), err)
-						result.timeouts.Inc()
-					} else {
-						p.l.Warningf("Target(%s): client.Get: %v", target, err)
-					}
-				} else {
-					respBody, err := ioutil.ReadAll(resp.Body)
-					if err != nil {
-						p.l.Warningf("Target:%s, Url:%s, http.runProbe: error in reading response from target: %v", target, req.URL.String(), err)
-					}
-					// Calling Body.Close() allows the TCP connection to be reused.
-					resp.Body.Close()
-					result.respCodes.IncKey(fmt.Sprintf("%d", resp.StatusCode))
-					result.success.Inc()
-					result.dnsLatency.AddFloat64(dnsLatency.Seconds() / p.opts.LatencyUnit.Seconds())
-					result.connLatency.AddFloat64(connLatency.Seconds() / p.opts.LatencyUnit.Seconds())
-					result.tlsHandshakeLatency.AddFloat64(tlsHandshakeLatency.Seconds() / p.opts.LatencyUnit.Seconds())
-					result.reqLatancy.AddFloat64(reqLatancy.Seconds() / p.opts.LatencyUnit.Seconds())
-					result.latency.AddFloat64(latency.Seconds() / p.opts.LatencyUnit.Seconds())
-					if p.c.GetExportResponseAsMetrics() {
-						if len(respBody) <= maxResponseSizeForMetrics {
-							result.respBodies.IncKey(string(respBody))
-						}
-					}
-				}
-
 				time.Sleep(time.Duration(p.c.GetRequestsIntervalMsec()) * time.Millisecond)
 			}
 			resultsChan <- result

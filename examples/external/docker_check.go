@@ -9,6 +9,7 @@ import (
 	"github.com/google/cloudprober/probes/external/serverutils"
 	"log"
 	"github.com/golang/protobuf/proto"
+	epb "github.com/google/cloudprober/probes/external/proto"
 )
 
 var isserver = flag.Bool("server", false, "Whether to run in server mode")
@@ -40,7 +41,7 @@ func dockerProbe() (string, error) {
 func main() {
 	flag.Parse()
 	if *isserver {
-		serverutils.Serve(func(request *serverutils.ProbeRequest, reply *serverutils.ProbeReply) {
+		serverutils.Serve(func(request *epb.ProbeRequest, reply *epb.ProbeReply) {
 			payload, err := dockerProbe()
 			reply.Payload = proto.String(payload)
 			if err != nil {
