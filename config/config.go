@@ -63,6 +63,24 @@ Cloudprober configs support following macros:
 		run_on: "{{$run_on}}"
 	}
 
+*) env - extract the value of a environment variable and use it in the configuration
+	a common use-case is using it inside a kubernetes cluster and use Downward API
+
+	# Use an environment variable to set a
+	probe {
+	  name: "dns_google_jp"
+	  type: DNS
+	  targets {
+		host_names: "1.1.1.1"
+	  }
+	  dns_probe {
+	   resolved_domain: "{{env "TEST_DOM"}}"
+	  }
+	  interval_msec: 5000  # 5s
+	  timeout_msec: 1000   # 1s
+	}
+	# Sample usage
+	# TEST_DOM=google.co.jp ./cloudprober --config_file=cloudprober.cfg
 */
 package config
 
@@ -100,17 +118,6 @@ func DefaultConfig() string {
 	return proto.MarshalTextString(&configpb.ProberConfig{})
 }
 
-type OptionalString struct {
-	ptr *string
-}
-
-func (s OptionalString) String() string {
-	if s.ptr == nil {
-		return ""
-	}
-	return *s.ptr
-}
-
 // ParseTemplate processes a config file as a Go text template.
 func ParseTemplate(config string, sysVars map[string]string) (string, error) {
 	funcMap := map[string]interface{}{
@@ -131,12 +138,14 @@ func ParseTemplate(config string, sysVars map[string]string) (string, error) {
 			}
 			return matches[n], nil
 		},
-		"env" : func(key string) OptionalString {
+		// env allows a user to lookup the value of a environment variable in
+		// the configuration
+		"env" : func(key string) string {
 			value, ok := os.LookupEnv(key)
 			if !ok {
-				return OptionalString{nil}
+				return ""
 			}
-			return OptionalString{&value}
+			return value
 		},
 	}
 	configTmpl, err := template.New("cloudprober_cfg").Funcs(funcMap).Parse(config)
