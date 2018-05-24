@@ -21,10 +21,14 @@ message ProbeConf {
   optional bool resolve_first = 4 [default = false];
   // Export response (body) count as a metric
   optional bool export_response_as_metrics = 5 [default = false];
+  // If specified, this string is used for payload's integrity check.
+  // Note: This feature is experimental and will most likely be replaced by a
+  // generic validator framework.
+  optional string integrity_check_pattern = 6;
   // Allow insecure tls
-  optional bool allow_insecure_tls = 6 [default=false];
+  optional bool allow_insecure_tls = 7 [default=false];
   // Allow user to pass ca crt path
-  optional string tls_ca_path = 7 [default="/etc/ssl/certs/ca-certificates.crt"];
+  optional string tls_ca_path = 8 [default="/etc/ssl/certs/ca-certificates.crt"];
 
   // Requests per probe
   optional int32 requests_per_probe = 98 [default = 1];
@@ -32,5 +36,4 @@ message ProbeConf {
   optional int32 requests_interval_msec = 99 [default = 25];
   // Export stats after these many milliseconds
   optional int32 stats_export_interval_msec = 100 [default = 10000];
-
 }
