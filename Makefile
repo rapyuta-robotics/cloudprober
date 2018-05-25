@@ -10,7 +10,7 @@ SOURCES := $(shell find . -name '*.go')
 test:
 	go test -v -race -covermode=atomic ./...
 
-$(BINARY): $(SOURCES)
+binaries:
 	CGO_ENABLED=0 go build -o cloudprober -ldflags "-X main.version=$(VERSION) -extldflags -static" ./cmd/cloudprober.go
 	CGO_ENABLED=0 go build -o docker_check -ldflags "-X main.version=$(VERSION) -extldflags -static" ./examples/external/docker_check.go
 
